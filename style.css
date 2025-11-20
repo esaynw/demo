@@ -1,0 +1,63 @@
+/* ====== Base Layout ====== */
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: #f5f7f4;
+  color: #2e2e2e;
+}
+
+/* ====== Color Palette ======
+   forest: deep green
+   light-green: soft environmental background
+   accent: earthy neutral tones
+*/
+.text-forest {
+  color: #2f5d50;
+}
+
+.bg-light-green {
+  background-color: #eaf3ec;
+}
+
+/* ====== Map Styling ====== */
+#map {
+  height: 550px;
+  width: 100%;
+  border: 2px solid #dce3de;
+  z-index: 0;
+}
+
+/* ====== Card Section ====== */
+.info-card {
+  border: 1px solid #d8e1db;
+  background: #ffffff;
+}
+
+/* ====== Leaflet Legend ====== */
+.leaflet-control .legend {
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+/* ====== Typography ====== */
+h1, h2, h3 {
+  font-family: 'Poppins', sans-serif;
+  color: #2f5d50;
+}
+
+p {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* ====== Utility / Responsive ====== */
+@media (max-width: 768px) {
+  header h1 {
+    font-size: 1.8rem;
+  }
+
+  #map {
+    height: 420px;
+  }
+}
