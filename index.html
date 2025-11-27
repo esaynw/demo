@@ -31,7 +31,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.18); 
     }
 
-    /* Tighter filter UI */
+    /* tighter filter UI */
     .filters { 
       min-width: 180px; 
       font-size: 13px; 
@@ -50,11 +50,6 @@
       font-weight: 600;
     }
 
-    /* About section scroll for smaller screens */
-    #aboutPanel { max-height: 600px; overflow-y: auto; }
-
-    .bg-light-green { background-color: #eaf3ec !important; }
-    .text-forest { color: #2f5d50 !important; }
   </style>
 </head>
 
@@ -79,43 +74,44 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="map-tab" data-bs-toggle="tab" data-bs-target="#mapPanel" type="button" role="tab">Map</button>
       </li>
+
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="about-tab" data-bs-toggle="tab" data-bs-target="#aboutPanel" type="button" role="tab">About</button>
       </li>
     </ul>
 
-    <div class="tab-content">
+<div class="tab-content">
 
-      <!-- MAP TAB -->
-      <div class="tab-pane fade show active" id="mapPanel" role="tabpanel">
-        <main class="my-4">
-          <div id="map" class="rounded-4 shadow-sm"></div>
-          <!-- Compute button below the map -->
-          <div class="info-card p-3 rounded-4 shadow-sm bg-white mt-3 d-inline-block">
-            <button id="computeBtn" class="btn btn-success btn-sm">Compute</button>
-            <div id="resultText"></div>
-          </div>
-        </main>
-      </div> <!-- End of mapPanel -->
+  <!-- MAP TAB -->
+  <div class="tab-pane fade show active" id="mapPanel" role="tabpanel">
+    <main class="my-4">
+      <div id="map" class="rounded-4 shadow-sm"></div>
+      <!-- Compute button below the map -->
+      <div class="info-card p-3 rounded-4 shadow-sm bg-white mt-3 d-inline-block">
+        <button id="computeBtn" class="btn btn-success btn-sm">Compute</button>
+        <div id="resultText"></div>
+      </div>
+    </main>
+  </div> <!-- End of mapPanel -->
 
-      <!-- ABOUT TAB -->
-      <div class="tab-pane fade" id="aboutPanel" role="tabpanel">
-        <section class="my-4">
-          <div class="info-card p-4 rounded-4 shadow-sm bg-white">
-            <h2 class="h5 text-forest mb-3">About this project</h2>
-            <p>
-              This map visualizes reported bike accidents and cycling infrastructure in Montreal. It analyses open data from the City of Montreal. Each point represents a collision event, with colour-coding based on selected variables. 
-              Using this map, users are able to compute and visualize different contributing factors and themes in bike accidents. This project presents an early prototype for what could be a more expansive and in-depth look into cyclist safety 
-              in dense urban environments. Increasing the amount of variables, a larger dataset of accidents for processing, and the integration of street-specific usage analysis and weighting, could produce interesting results for better understanding 
-              of and adapting to cyclist hazards.
-            </p>
-          </div>
-        </section>
-      </div> <!-- End of aboutPanel -->
+  <!-- ABOUT TAB -->
+  <div class="tab-pane fade" id="aboutPanel" role="tabpanel">
+    <section class="my-4">
+      <div class="info-card p-4 rounded-4 shadow-sm bg-white">
+        <h2 class="h5 text-forest mb-3">About this project</h2>
+        <p>
+          This map visualizes reported bike accidents and cycling infrastructure in Montreal. It analyses open data from the City of Montreal. Each point represents a collision event, with colour-coding based on selected variables. 
+          Using this map, users are able to compute and visualize different contributing factors and themes in bike accidents. This project presents an early prototype for what could be a more expansive and in-depth look into cyclist safety 
+          in dense urban environments. Increasing the amount of variables, a larger dataset of accidents for processing, and the integration of street-specific usage analysis and weighting, could produce interesting results for better understanding 
+          of and adapting to cyclist hazards.
+        </p>
+      </div>
+    </section>
+  </div>
 
-    </div> <!-- End tab-content -->
+</div>
 
-  </div> <!-- End container -->
+  </div>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
