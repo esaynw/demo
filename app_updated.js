@@ -1,12 +1,11 @@
 // ================================
-// app_corrected.js
-// Montreal Bike Accident Hotspots
+// app_updated.js
+// Montreal Bike Accident Hotspots (Corrected)
 // ================================
 
 // ---------------- init map ----------------
 const map = L.map('map').setView([45.508888, -73.561668], 12);
 
-// Simple roads + green base (Carto Light - no labels)
 L.tileLayer('https://cartodb-basemaps-a.global.ssl.fastly.net/light_nolabels/{z}/{x}/{y}.png', {
   maxZoom: 20,
   attribution: '© OpenStreetMap, CARTO'
@@ -19,8 +18,8 @@ map.createPane("heatPane"); map.getPane("heatPane").style.zIndex = 450;
 map.createPane("densePane"); map.getPane("densePane").style.zIndex = 460;
 
 // ---------------- state ----------------
-let accidentsGeo = null;    // full accidents GeoJSON
-let lanesGeo = null;        // bike network GeoJSON
+let accidentsGeo = null;
+let lanesGeo = null;
 let accidentsLayer = L.layerGroup().addTo(map);
 let heatLayer = L.layerGroup().addTo(map);
 let lanesLayer = null;
@@ -31,37 +30,6 @@ const computeBtn = document.getElementById('computeBtn');
 const resultText = document.getElementById('resultText');
 
 // ---------------- helpers ----------------
-
-// Accident type mapping
-function getAccidentType(val) {
-  if (!val) return "No Injury";
-  const g = String(val).toLowerCase();
-  if (g.includes("mortel") || g.includes("grave")) return "Fatal/Hospitalization";
-  if (g.includes("léger")) return "Injury";
-  return "No Injury";
-}
-
-// Color for markers
-function getAccidentColor(val) {
-  const type = getAccidentType(val);
-  if (type === "Fatal/Hospitalization") return "red";
-  if (type === "Injury") return "yellow";
-  return "green";
-}
-
-// Lighting label mapping
-function getLightingLabel(val) {
-  const v = String(val).trim();
-  const map = {
-    "1": "Daytime – bright",
-    "2": "Daytime – semi-obscure",
-    "3": "Night – lit",
-    "4": "Night – unlit"
-  };
-  return map[v] || "Undefined";
-}
-
-// Weather label mapping (CD_COND_METEO)
 function getWeatherLabel(val) {
   const v = String(val).trim();
   const map = {
@@ -79,7 +47,33 @@ function getWeatherLabel(val) {
   return map[v] || "Undefined";
 }
 
-// ---------------- load files -----------------
+function getAccidentType(val) {
+  if (!val) return "No Injury";
+  const g = String(val).toLowerCase();
+  if (g.includes("mortel") || g.includes("grave")) return "Fatal/Hospitalization";
+  if (g.includes("léger")) return "Injury";
+  return "No Injury";
+}
+
+function getAccidentColor(val) {
+  const type = getAccidentType(val);
+  if (type === "Fatal/Hospitalization") return "red";
+  if (type === "Injury") return "yellow";
+  return "green";
+}
+
+function getLightingLabel(val) {
+  const v = String(val).trim();
+  const map = {
+    "1": "Daytime – bright",
+    "2": "Daytime – semi-obscure",
+    "3": "Night – lit",
+    "4": "Night – unlit"
+  };
+  return map[v] || "Undefined";
+}
+
+// ---------------- load files ----------------
 async function loadFiles() {
   async function tryFetch(name) {
     try {
@@ -100,14 +94,12 @@ async function loadFiles() {
   if (!accidentsGeo) { resultText.innerText = "Error: cannot load accidents file."; computeBtn.disabled = true; return; }
   if (!lanesGeo) { resultText.innerText = "Error: cannot load bike lanes file."; computeBtn.disabled = true; return; }
 
-  // Add bike lanes
   lanesLayer = L.geoJSON(lanesGeo, {
     pane: "roadsPane",
     style: { color: "#003366", weight: 2, opacity: 0.9 }
   }).addTo(map);
 
   addBikeLaneLegend();
-
   buildAccidentFilter();
   renderPreview();
 
@@ -116,7 +108,7 @@ async function loadFiles() {
 }
 loadFiles();
 
-// ---------------- build filters -----------------
+// ---------------- filters ----------------
 function buildAccidentFilter() {
   if (document.querySelector('.graviteCheckbox')) return;
 
@@ -140,21 +132,29 @@ function buildAccidentFilter() {
   ctrl.onAdd = () => div;
   ctrl.addTo(map);
 
-  // Weather checkboxes
-  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(f.properties.CD_COND_METEO || "")))].sort();
+  // Weather options
+  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_COND_METEO || 0))))];
+  weatherVals.sort();
   const wf = document.getElementById("weatherFilters");
-  weatherVals.forEach(v => { wf.innerHTML += `<label><input type="checkbox" class="weatherCheckbox" value="${v}"> ${getWeatherLabel(v)}</label><br>`; });
+  weatherVals.forEach(v => {
+    const label = getWeatherLabel(v);
+    wf.innerHTML += `<label><input type="checkbox" class="weatherCheckbox" value="${v}"> ${label}</label><br>`;
+  });
 
-  // Lighting checkboxes
-  const lightVals = [...new Set(accidentsGeo.features.map(f => String(f.properties.CD_ECLRM || "")))].sort();
+  // Lighting options
+  const lightVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_ECLRM || 0))))];
+  lightVals.sort();
   const lf = document.getElementById("lightingFilters");
-  lightVals.forEach(v => { lf.innerHTML += `<label><input type="checkbox" class="lightingCheckbox" value="${v}"> ${getLightingLabel(v)}</label><br>`; });
+  lightVals.forEach(v => {
+    const label = getLightingLabel(v);
+    lf.innerHTML += `<label><input type="checkbox" class="lightingCheckbox" value="${v}"> ${label}</label><br>`;
+  });
 
   document.querySelectorAll('.graviteCheckbox, .weatherCheckbox, .lightingCheckbox')
     .forEach(cb => cb.addEventListener('change', renderPreview));
 }
 
-// ---------------- render preview -----------------
+// ---------------- render preview ----------------
 function renderPreview() {
   if (!accidentsGeo) return;
   accidentsLayer.clearLayers();
@@ -170,40 +170,45 @@ function renderPreview() {
   const filtered = feats.filter(f => {
     const p = f.properties;
     const type = getAccidentType(p.GRAVITE);
-    if (selectedTypes.length > 0 && !selectedTypes.includes(type)) return false;
-    const w = String(p.CD_COND_METEO || "").trim();
-    if (selectedWeather.length > 0 && !selectedWeather.includes(w)) return false;
-    const l = String(p.CD_ECLRM || "").trim();
-    if (selectedLighting.length > 0 && !selectedLighting.includes(l)) return false;
+    if (selectedTypes.length && !selectedTypes.includes(type)) return false;
+
+    const weatherVal = p.CD_COND_METEO != null ? String(Math.floor(p.CD_COND_METEO)) : "";
+    if (selectedWeather.length && !selectedWeather.includes(weatherVal)) return false;
+
+    const lightVal = p.CD_ECLRM != null ? String(Math.floor(p.CD_ECLRM)) : "";
+    if (selectedLighting.length && !selectedLighting.includes(lightVal)) return false;
+
     return true;
   });
 
   // Add markers
   filtered.forEach(f => {
-    const [lon, lat] = f.geometry.coordinates;
-    const type = getAccidentType(f.properties.GRAVITE);
+    const lon = f.geometry.coordinates[0];
+    const lat = f.geometry.coordinates[1];
+    const p = f.properties;
+    const weatherVal = p.CD_COND_METEO != null ? String(Math.floor(p.CD_COND_METEO)) : "";
+    const lightVal = p.CD_ECLRM != null ? String(Math.floor(p.CD_ECLRM)) : "";
 
     const marker = L.circleMarker([lat, lon], {
       pane: "collisionsPane",
       radius: 3,
-      fillColor: getAccidentColor(f.properties.GRAVITE),
+      fillColor: getAccidentColor(p.GRAVITE),
       color: "#333",
       weight: 1,
       fillOpacity: 0.9
     }).bindPopup(`
-      <b>ID:</b> ${f.properties.NO_SEQ_COLL || ''}<br>
-      <b>Accident type:</b> ${type}<br>
-      <b>Weather:</b> ${getWeatherLabel(f.properties.CD_COND_METEO)}<br>
-      <b>Lighting:</b> ${getLightingLabel(f.properties.CD_ECLRM)}
+      <b>ID:</b> ${p.NO_SEQ_COLL || ''}<br>
+      <b>Accident type:</b> ${getAccidentType(p.GRAVITE)}<br>
+      <b>Weather:</b> ${getWeatherLabel(weatherVal)}<br>
+      <b>Lighting:</b> ${getLightingLabel(lightVal)}
     `);
-
     accidentsLayer.addLayer(marker);
   });
 
   // Heatmap
   if (filtered.length > 0) {
     const pts = filtered.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0], 0.7]);
-    heatLayer.addLayer(L.heatLayer(pts, { pane: "heatPane", radius: 25, blur: 20, gradient:{0.2:'yellow',0.5:'orange',1:'red'}, minOpacity: 0.3 }));
+    heatLayer.addLayer(L.heatLayer(pts, {pane:"heatPane", radius:25, blur:20, gradient:{0.2:'yellow',0.5:'orange',1:'red'}, minOpacity:0.3}));
 
     // Densest point
     let best = null;
@@ -216,17 +221,13 @@ function renderPreview() {
         const d = turf.distance(turf.point(pi.geometry.coordinates), turf.point(pj.geometry.coordinates), {units:'meters'});
         if (d <= radiusM) count++;
       }
-      if (!best || count > best.count) best = { feat: pi, count };
+      if (!best || count > best.count) best = {feat:pi, count};
     }
     if (best) {
-      const [lon, lat] = best.feat.geometry.coordinates;
+      const lon = best.feat.geometry.coordinates[0];
+      const lat = best.feat.geometry.coordinates[1];
       densestMarker = L.circleMarker([lat, lon], {
-        pane: "densePane",
-        radius: 10,
-        fillColor: "black",
-        color: "#000",
-        weight: 1,
-        fillOpacity: 1
+        pane:"densePane", radius:10, fillColor:"black", color:"#000", weight:1, fillOpacity:1
       }).bindPopup(`<b>Densest area (approx)</b><br>Nearby accidents (200m): ${best.count}`).addTo(map);
     }
 
@@ -234,43 +235,47 @@ function renderPreview() {
   }
 }
 
-// ---------------- Compute Results -----------------
+// ---------------- Compute % on bike lanes ----------------
 computeBtn.addEventListener('click', () => {
   if (!accidentsGeo || !lanesGeo) { resultText.innerText = "Data not loaded."; return; }
 
-  const feats = accidentsGeo.features || [];
-
-  // Filters
   const selectedTypes = Array.from(document.querySelectorAll('.graviteCheckbox:checked')).map(x => x.value);
   const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x => x.value);
   const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x => x.value);
 
+  const feats = accidentsGeo.features || [];
+
+  // Filter using all selected filters
   const filtered = feats.filter(f => {
     const p = f.properties;
     const type = getAccidentType(p.GRAVITE);
-    if (selectedTypes.length > 0 && !selectedTypes.includes(type)) return false;
-    const w = String(p.CD_COND_METEO || "").trim();
-    if (selectedWeather.length > 0 && !selectedWeather.includes(w)) return false;
-    const l = String(p.CD_ECLRM || "").trim();
-    if (selectedLighting.length > 0 && !selectedLighting.includes(l)) return false;
+    if (selectedTypes.length && !selectedTypes.includes(type)) return false;
+
+    const weatherVal = p.CD_COND_METEO != null ? String(Math.floor(p.CD_COND_METEO)) : "";
+    if (selectedWeather.length && !selectedWeather.includes(weatherVal)) return false;
+
+    const lightVal = p.CD_ECLRM != null ? String(Math.floor(p.CD_ECLRM)) : "";
+    if (selectedLighting.length && !selectedLighting.includes(lightVal)) return false;
+
     return true;
   });
 
-  // Count how many points are on bike lanes
-  const onCount = filtered.filter(f => {
+  // Use buffer method for bike lane intersection
+  const onBikeLaneCount = filtered.filter(f => {
     const pt = turf.point(f.geometry.coordinates);
-    return lanesGeo.features.some(line => turf.booleanPointOnLine(pt, line));
+    const buffered = turf.buffer(pt, 5, {units:'meters'}); // 5m buffer
+    return lanesGeo.features.some(line => turf.booleanIntersects(buffered, line));
   }).length;
 
   const total = filtered.length;
-  const pct = total > 0 ? ((onCount/total)*100).toFixed(1) : "0";
-  resultText.innerText = `${pct}% on bike lanes (${onCount}/${total})`;
+  const pct = total ? ((onBikeLaneCount/total)*100).toFixed(1) : "0";
+  resultText.innerText = `${pct}% on bike lanes (${onBikeLaneCount}/${total})`;
 });
 
-// ---------------- Legend -----------------
+// ---------------- Legend ----------------
 function addBikeLaneLegend() {
   const legend = L.control({position:'bottomleft'});
-  legend.onAdd = () => {
+  legend.onAdd = function() {
     const div = L.DomUtil.create('div', 'results-bar');
     div.innerHTML = '<span style="background:#003366;width:20px;height:4px;display:inline-block;margin-right:5px;"></span> Bike lanes';
     return div;
@@ -278,7 +283,7 @@ function addBikeLaneLegend() {
   legend.addTo(map);
 }
 
-// ---------------- debug helper -----------------
+// ---------------- debug ----------------
 window._map_state = function() {
   return {
     accidentsLoaded: !!accidentsGeo,
