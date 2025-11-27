@@ -32,8 +32,13 @@ const resultText = document.getElementById('resultText');
 let selectedVariable = "Accident Type"; // default variable to compute
 
 // ---------------- helpers ----------------
+function parseProp(val) {
+  if (val === null || val === undefined) return 0;
+  return Number(String(val).split(".")[0]);
+}
+
 function getWeatherLabel(val) {
-  const v = String(Math.floor(val || 0));
+  const v = String(parseProp(val));
   const map = {
     "11": "Clear",
     "12": "Partly cloudy",
@@ -65,7 +70,7 @@ function getAccidentColor(val) {
 }
 
 function getLightingLabel(val) {
-  const v = String(Math.floor(val || 0));
+  const v = parseProp(val);
   const map = {
     "1": "Daytime – bright",
     "2": "Daytime – semi-obscure",
@@ -75,7 +80,7 @@ function getLightingLabel(val) {
   return map[v] || "Undefined";
 }
 
-// Color gradient for lighting
+// Lighting gradient colors
 const lightingColors = {
   "1": "#a6cee3", // light blue
   "2": "#1f78b4",
@@ -152,13 +157,13 @@ function buildFilterMenu() {
     atf.innerHTML += `<label><input type="checkbox" class="accTypeCheckbox" value="${v}" checked> ${v}</label><br>`;
   });
 
-  const lightVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_ECLRM || 0))))].sort();
+  const lightVals = [...new Set(accidentsGeo.features.map(f => String(parseProp(f.properties.CD_ECLRM))))].sort();
   const lf = document.getElementById("lightingFilters");
   lightVals.forEach(v => {
     lf.innerHTML += `<label><input type="checkbox" class="lightingCheckbox" value="${v}" checked> ${getLightingLabel(v)}</label><br>`;
   });
 
-  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_COND_METEO || 0))))].sort();
+  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(parseProp(f.properties.CD_COND_METEO))))].sort();
   const wf = document.getElementById("weatherFilters");
   weatherVals.forEach(v => {
     wf.innerHTML += `<label><input type="checkbox" class="weatherCheckbox" value="${v}" checked> ${getWeatherLabel(v)}</label><br>`;
@@ -189,8 +194,8 @@ function renderPreview() {
   const filtered = feats.filter(f => {
     const p = f.properties;
     if (selectedTypes.length && !selectedTypes.includes(getAccidentType(p.GRAVITE))) return false;
-    if (selectedLighting.length && !selectedLighting.includes(String(Math.floor(p.CD_ECLRM || 0)))) return false;
-    if (selectedWeather.length && !selectedWeather.includes(String(Math.floor(p.CD_COND_METEO || 0)))) return false;
+    if (selectedLighting.length && !selectedLighting.includes(String(parseProp(p.CD_ECLRM)))) return false;
+    if (selectedWeather.length && !selectedWeather.includes(String(parseProp(p.CD_COND_METEO)))) return false;
     return true;
   });
 
@@ -204,7 +209,7 @@ function renderPreview() {
     let fillColor = getAccidentColor(f.properties.GRAVITE);
 
     // Lighting gradient coloring
-    if (selectedVariable === "Lighting") fillColor = lightingColors[String(Math.floor(f.properties.CD_ECLRM || 0))];
+    if (selectedVariable === "Lighting") fillColor = lightingColors[String(parseProp(f.properties.CD_ECLRM))];
 
     // Bike lane points colored pink
     if (selectedVariable === "ON_BIKELANE" && isOnBikeLane(f.geometry.coordinates)) fillColor = "pink";
@@ -234,21 +239,42 @@ function renderPreview() {
   }
 }
 
-// ---------------- Compute Results -----------------
+// ---------------- Bike lane detection -----------------
 function isOnBikeLane(coords) {
   const pt = turf.point(coords);
   for (const f of lanesGeo.features) {
-    const line = turf.lineString(f.geometry.coordinates);
-    const buffered = turf.buffer(line, 0.005, { units: 'kilometers' }); // 5m buffer
-    if (turf.booleanPointInPolygon(pt, buffered)) return true;
+    if (!f.geometry) continue;
+    if (f.geometry.type === "LineString") {
+      const line = turf.lineString(f.geometry.coordinates);
+      const buffered = turf.buffer(line, 0.005, { units: 'kilometers' });
+      if (turf.booleanPointInPolygon(pt, buffered)) return true;
+    } else if (f.geometry.type === "MultiLineString") {
+      for (const segment of f.geometry.coordinates) {
+        const line = turf.lineString(segment);
+        const buffered = turf.buffer(line, 0.005, { units: 'kilometers' });
+        if (turf.booleanPointInPolygon(pt, buffered)) return true;
+      }
+    }
   }
   return false;
 }
 
+// ---------------- Compute Results -----------------
 computeBtn.addEventListener('click', () => {
   if (!accidentsGeo) return;
 
-  const feats = accidentsGeo.features || [];
+  const selectedTypes = Array.from(document.querySelectorAll('.accTypeCheckbox:checked')).map(x => x.value);
+  const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x => x.value);
+  const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x => x.value);
+
+  const feats = accidentsGeo.features.filter(f => {
+    const p = f.properties;
+    if (selectedTypes.length && !selectedTypes.includes(getAccidentType(p.GRAVITE))) return false;
+    if (selectedLighting.length && !selectedLighting.includes(String(parseProp(p.CD_ECLRM)))) return false;
+    if (selectedWeather.length && !selectedWeather.includes(String(parseProp(p.CD_COND_METEO)))) return false;
+    return true;
+  });
+
   const counts = {};
   const total = feats.length;
 
