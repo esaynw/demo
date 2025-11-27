@@ -1,6 +1,6 @@
 // ================================
-// app_full_corrected.js
-// Montreal Bike Accident Hotspots - Fully Corrected
+// app_optimized.js
+// Montreal Bike Accident Hotspots (Optimized for Performance)
 // ================================
 
 // ---------------- init map ----------------
@@ -20,11 +20,11 @@ map.createPane("densePane"); map.getPane("densePane").style.zIndex = 460;
 // ---------------- state ----------------
 let accidentsGeo = null;
 let lanesGeo = null;
+let lanesBufferGeo = null; // precomputed bike lane buffers
 let accidentsLayer = L.layerGroup().addTo(map);
 let heatLayer = L.layerGroup().addTo(map);
 let lanesLayer = null;
 let densestMarker = null;
-let selectedVariable = "Accident Type";
 
 // UI elements
 const computeBtn = document.getElementById('computeBtn');
@@ -32,12 +32,11 @@ const resultText = document.getElementById('resultText');
 
 // ---------------- helpers ----------------
 function getWeatherLabel(val) {
-  const v = String(Math.floor(val || 0));
+  const v = String(val).trim();
   const map = {
-    "11": "Clear", "12": "Partly cloudy", "13": "Cloudy",
-    "14": "Rain", "15": "Snow", "16": "Freezing rain",
-    "17": "Fog", "18": "High winds", "19": "Other precip",
-    "99": "Other / Unspecified"
+    "11": "Clear","12": "Partly cloudy","13": "Cloudy","14": "Rain",
+    "15": "Snow","16": "Freezing rain","17": "Fog","18": "High winds",
+    "19": "Other precip","99": "Other / Unspecified"
   };
   return map[v] || "Undefined";
 }
@@ -52,22 +51,16 @@ function getAccidentType(val) {
 
 function getAccidentColor(val) {
   const type = getAccidentType(val);
-  if (type === "Fatal/Hospitalization") return "#d62728"; // red
-  if (type === "Injury") return "#ff7f0e"; // orange
-  return "#2ca02c"; // green
+  if (type === "Fatal/Hospitalization") return "red";
+  if (type === "Injury") return "yellow";
+  return "green";
 }
 
 function getLightingLabel(val) {
-  const v = String(Math.floor(val || 0));
-  const map = {
-    "1": "Daytime – bright", "2": "Daytime – semi-obscure",
-    "3": "Night – lit", "4": "Night – unlit"
-  };
+  const v = String(val).trim();
+  const map = {"1":"Daytime – bright","2":"Daytime – semi-obscure","3":"Night – lit","4":"Night – unlit"};
   return map[v] || "Undefined";
 }
-
-// Lighting color gradient
-const lightingColors = { "1": "#a6cee3", "2": "#1f78b4", "3": "#6a3d9a", "4": "#b15928" };
 
 // ---------------- load files ----------------
 async function loadFiles() {
@@ -78,7 +71,10 @@ async function loadFiles() {
       const j = await r.json();
       console.log("Loaded:", name);
       return j;
-    } catch (e) { console.warn("Fetch failed:", name, e); return null; }
+    } catch (e) {
+      console.warn("Fetch failed:", name, e);
+      return null;
+    }
   }
 
   accidentsGeo = await tryFetch('bikes_with_lane_flag.geojson') || await tryFetch('bikes.geojson');
@@ -87,62 +83,73 @@ async function loadFiles() {
   if (!accidentsGeo) { resultText.innerText = "Error: cannot load accidents file."; computeBtn.disabled = true; return; }
   if (!lanesGeo) { resultText.innerText = "Error: cannot load bike lanes file."; computeBtn.disabled = true; return; }
 
-  // Add bike lanes
-  lanesLayer = L.geoJSON(lanesGeo, { pane: "roadsPane", style: { color: "#003366", weight: 2, opacity: 0.9 } }).addTo(map);
+  // Precompute buffered bike lanes (5 meters)
+  lanesBufferGeo = {
+    type: "FeatureCollection",
+    features: lanesGeo.features.map(f => turf.buffer(f, 0.005, {units:'kilometers'}))
+  };
+
+  lanesLayer = L.geoJSON(lanesGeo, {
+    pane: "roadsPane",
+    style: { color: "#003366", weight: 2, opacity: 0.9 }
+  }).addTo(map);
 
   addBikeLaneLegend();
-  buildVariableMenu();
+  buildAccidentFilter();
   renderPreview();
 
   computeBtn.disabled = false;
-  resultText.innerText = "Files loaded. Select variable and filters, then click 'Compute'.";
+  resultText.innerText = "Files loaded. Select filters and click 'Compute'.";
 }
 loadFiles();
 
-// ---------------- Variable & Filter Menu -----------------
-function buildVariableMenu() {
-  if (!accidentsGeo) return;
+// ---------------- filters ----------------
+function buildAccidentFilter() {
+  if (document.querySelector('.graviteCheckbox')) return;
 
   const div = L.DomUtil.create('div', 'filters p-2 bg-white rounded shadow-sm');
-  div.innerHTML = `
-    <h6><b>Variable & Filters</b></h6>
-    <strong>Variable:</strong><br>
-    <select id="variableSelect" class="form-select form-select-sm mb-2">
-      <option value="Accident Type" selected>Accident Type</option>
-      <option value="ON_BIKELANE">Bike Lane</option>
-      <option value="Lighting">Lighting</option>
-      <option value="Weather">Weather</option>
-    </select>
 
-    <strong>Accident Type:</strong><br><div id="accTypeFilters"></div><br>
-    <strong>Lighting:</strong><br><div id="lightingFilters"></div><br>
-    <strong>Weather:</strong><br><div id="weatherFilters"></div>
+  div.innerHTML = `
+    <h6><b>Filters</b></h6>
+    <strong>Accident type:</strong><br>
+    <label><input type="checkbox" class="graviteCheckbox" value="Fatal/Hospitalization"> Fatal/Hospitalization</label><br>
+    <label><input type="checkbox" class="graviteCheckbox" value="Injury"> Injury</label><br>
+    <label><input type="checkbox" class="graviteCheckbox" value="No Injury"> No Injury</label><br><br>
+
+    <strong>Weather (CD_COND_METEO):</strong><br>
+    <div id="weatherFilters"></div><br>
+
+    <strong>Lighting (CD_ECLRM):</strong><br>
+    <div id="lightingFilters"></div><br>
   `;
 
   const ctrl = L.control({position: 'topright'});
-  ctrl.onAdd = () => div; ctrl.addTo(map);
+  ctrl.onAdd = () => div;
+  ctrl.addTo(map);
 
-  // Accident type checkboxes
-  const accTypes = ["Fatal/Hospitalization","Injury","No Injury"];
-  const atf = document.getElementById("accTypeFilters");
-  accTypes.forEach(v => { atf.innerHTML += `<label><input type="checkbox" class="accTypeCheckbox" value="${v}" checked> ${v}</label><br>`; });
-
-  // Lighting checkboxes
-  const lightVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_ECLRM || 0))))].sort();
-  const lf = document.getElementById("lightingFilters");
-  lightVals.forEach(v => { lf.innerHTML += `<label><input type="checkbox" class="lightingCheckbox" value="${v}" checked> ${getLightingLabel(v)}</label><br>`; });
-
-  // Weather checkboxes
-  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_COND_METEO || 0))))].sort();
+  // Weather options
+  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_COND_METEO || 0))))];
+  weatherVals.sort();
   const wf = document.getElementById("weatherFilters");
-  weatherVals.forEach(v => { wf.innerHTML += `<label><input type="checkbox" class="weatherCheckbox" value="${v}" checked> ${getWeatherLabel(v)}</label><br>`; });
+  weatherVals.forEach(v => {
+    const label = getWeatherLabel(v);
+    wf.innerHTML += `<label><input type="checkbox" class="weatherCheckbox" value="${v}"> ${label}</label><br>`;
+  });
 
-  // Event listeners
-  document.querySelectorAll('.accTypeCheckbox, .lightingCheckbox, .weatherCheckbox').forEach(cb => cb.addEventListener('change', renderPreview));
-  document.getElementById("variableSelect").addEventListener('change', e => { selectedVariable = e.target.value; renderPreview(); });
+  // Lighting options
+  const lightVals = [...new Set(accidentsGeo.features.map(f => String(Math.floor(f.properties.CD_ECLRM || 0))))];
+  lightVals.sort();
+  const lf = document.getElementById("lightingFilters");
+  lightVals.forEach(v => {
+    const label = getLightingLabel(v);
+    lf.innerHTML += `<label><input type="checkbox" class="lightingCheckbox" value="${v}"> ${label}</label><br>`;
+  });
+
+  document.querySelectorAll('.graviteCheckbox, .weatherCheckbox, .lightingCheckbox')
+    .forEach(cb => cb.addEventListener('change', renderPreview));
 }
 
-// ---------------- render preview -----------------
+// ---------------- render preview ----------------
 function renderPreview() {
   if (!accidentsGeo) return;
   accidentsLayer.clearLayers();
@@ -150,82 +157,93 @@ function renderPreview() {
   if (densestMarker) { map.removeLayer(densestMarker); densestMarker = null; }
 
   const feats = accidentsGeo.features || [];
-  const selectedTypes = Array.from(document.querySelectorAll('.accTypeCheckbox:checked')).map(x=>x.value);
-  const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x=>x.value);
-  const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x=>x.value);
+
+  const selectedTypes = Array.from(document.querySelectorAll('.graviteCheckbox:checked')).map(x => x.value);
+  const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x => x.value);
+  const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x => x.value);
 
   const filtered = feats.filter(f => {
     const p = f.properties;
-    if (selectedTypes.length && !selectedTypes.includes(getAccidentType(p.GRAVITE))) return false;
-    if (selectedLighting.length && !selectedLighting.includes(String(Math.floor(p.CD_ECLRM || 0)))) return false;
-    if (selectedWeather.length && !selectedWeather.includes(String(Math.floor(p.CD_COND_METEO || 0)))) return false;
+    const type = getAccidentType(p.GRAVITE);
+    if (selectedTypes.length && !selectedTypes.includes(type)) return false;
+
+    const weatherVal = p.CD_COND_METEO != null ? String(Math.floor(p.CD_COND_METEO)) : "";
+    if (selectedWeather.length && !selectedWeather.includes(weatherVal)) return false;
+
+    const lightVal = p.CD_ECLRM != null ? String(Math.floor(p.CD_ECLRM)) : "";
+    if (selectedLighting.length && !selectedLighting.includes(lightVal)) return false;
+
     return true;
   });
 
+  // Add markers
   filtered.forEach(f => {
-    const [lon, lat] = f.geometry.coordinates;
+    const lon = f.geometry.coordinates[0];
+    const lat = f.geometry.coordinates[1];
     const p = f.properties;
-
-    let fillColor = getAccidentColor(p.GRAVITE);
-    if (selectedVariable === "Lighting") fillColor = lightingColors[String(Math.floor(p.CD_ECLRM || 0))] || fillColor;
-    if (selectedVariable === "ON_BIKELANE" && isOnBikeLane(f.geometry.coordinates)) fillColor = "pink";
+    const onBikeLane = isOnBikeLane(f.geometry.coordinates);
 
     const marker = L.circleMarker([lat, lon], {
       pane: "collisionsPane",
-      radius: 4,
-      fillColor,
+      radius: 3,
+      fillColor: onBikeLane ? "pink" : getAccidentColor(p.GRAVITE),
       color: "#333",
       weight: 1,
       fillOpacity: 0.9
     }).bindPopup(`
       <b>ID:</b> ${p.NO_SEQ_COLL || ''}<br>
       <b>Accident type:</b> ${getAccidentType(p.GRAVITE)}<br>
-      <b>Lighting:</b> ${getLightingLabel(p.CD_ECLRM)}<br>
       <b>Weather:</b> ${getWeatherLabel(p.CD_COND_METEO)}<br>
-      <b>Bike lane:</b> ${isOnBikeLane(f.geometry.coordinates) ? "On Bike Lane" : "Off Bike Lane"}
+      <b>Lighting:</b> ${getLightingLabel(p.CD_ECLRM)}<br>
+      <b>Bike lane:</b> ${onBikeLane ? "Yes" : "No"}
     `);
     accidentsLayer.addLayer(marker);
   });
 
-  if (filtered.length>0) {
+  // Heatmap
+  if (filtered.length > 0) {
     const pts = filtered.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0], 0.7]);
     heatLayer.addLayer(L.heatLayer(pts, {pane:"heatPane", radius:25, blur:20, gradient:{0.2:'yellow',0.5:'orange',1:'red'}, minOpacity:0.3}));
   }
 }
 
-// ---------------- bike lane buffer check -----------------
+// ---------------- Compute % on bike lanes ----------------
 function isOnBikeLane(coords) {
   const pt = turf.point(coords);
-  return lanesGeo.features.some(line => turf.booleanIntersects(turf.buffer(pt, 5, {units:'meters'}), line));
+  return lanesBufferGeo.features.some(bufferedLine => turf.booleanPointInPolygon(pt, bufferedLine));
 }
 
-// ---------------- Compute percentages -----------------
 computeBtn.addEventListener('click', () => {
-  if (!accidentsGeo) return;
+  if (!accidentsGeo || !lanesGeo) { resultText.innerText = "Data not loaded."; return; }
+
+  const selectedTypes = Array.from(document.querySelectorAll('.graviteCheckbox:checked')).map(x => x.value);
+  const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x => x.value);
+  const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x => x.value);
 
   const feats = accidentsGeo.features || [];
-  const categoryCounts = {};
-  const total = feats.length;
 
-  feats.forEach(f => {
-    let val;
-    switch(selectedVariable) {
-      case "Accident Type": val = getAccidentType(f.properties.GRAVITE); break;
-      case "Lighting": val = getLightingLabel(f.properties.CD_ECLRM); break;
-      case "Weather": val = getWeatherLabel(f.properties.CD_COND_METEO); break;
-      case "ON_BIKELANE": val = isOnBikeLane(f.geometry.coordinates) ? "On Bike Lane" : "Off Bike Lane"; break;
-    }
-    categoryCounts[val] = (categoryCounts[val] || 0) + 1;
+  const filtered = feats.filter(f => {
+    const p = f.properties;
+    const type = getAccidentType(p.GRAVITE);
+    if (selectedTypes.length && !selectedTypes.includes(type)) return false;
+
+    const weatherVal = p.CD_COND_METEO != null ? String(Math.floor(p.CD_COND_METEO)) : "";
+    if (selectedWeather.length && !selectedWeather.includes(weatherVal)) return false;
+
+    const lightVal = p.CD_ECLRM != null ? String(Math.floor(p.CD_ECLRM)) : "";
+    if (selectedLighting.length && !selectedLighting.includes(lightVal)) return false;
+
+    return true;
   });
 
-  let output = "";
-  for (const [k,v] of Object.entries(categoryCounts)) {
-    output += `${k}: ${((v/total)*100).toFixed(1)}% (${v}/${total})\n`;
-  }
-  resultText.innerText = output;
+  const onBikeLaneCount = filtered.filter(f => isOnBikeLane(f.geometry.coordinates)).length;
+  const total = filtered.length;
+  const pct = total ? ((onBikeLaneCount/total)*100).toFixed(1) : "0";
+
+  resultText.innerText = `${pct}% on bike lanes (${onBikeLaneCount}/${total})`;
 });
 
-// ---------------- Legend -----------------
+// ---------------- Legend ----------------
 function addBikeLaneLegend() {
   const legend = L.control({position:'bottomleft'});
   legend.onAdd = function() {
@@ -236,11 +254,12 @@ function addBikeLaneLegend() {
   legend.addTo(map);
 }
 
-// ---------------- debug -----------------
+// ---------------- debug ----------------
 window._map_state = function() {
   return {
     accidentsLoaded: !!accidentsGeo,
     lanesLoaded: !!lanesGeo,
+    lanesBuffered: !!lanesBufferGeo,
     accidentsCount: accidentsGeo ? accidentsGeo.features.length : 0,
     lanesCount: lanesGeo ? (lanesGeo.features ? lanesGeo.features.length : 1) : 0
   };
