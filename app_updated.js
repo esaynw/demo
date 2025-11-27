@@ -31,24 +31,6 @@ const computeBtn = document.getElementById('computeBtn');
 const resultText = document.getElementById('resultText');
 
 // ---------------- helpers ----------------
-// Weather label mapping (CD_COND_METEO)
-function getWeatherLabel(val) {
-  const v = String(val).trim();
-  const map = {
-    "11": "Clear",
-    "12": "Partly cloudy",
-    "13": "Cloudy",
-    "14": "Rain",
-    "15": "Snow",
-    "16": "Freezing rain",
-    "17": "Fog",
-    "18": "High winds",
-    "19": "Other precip",
-    "99": "Other / Unspecified"
-  };
-  return map[v] || "Undefined";
-}
-
 // Accident type mapping for filter & popup
 function getAccidentType(val) {
   if (!val) return "No Injury";
@@ -68,15 +50,13 @@ function getAccidentColor(val) {
 
 // Lighting label mapping
 function getLightingLabel(val) {
-  const v = String(val).trim();
-  const map = {
-    "1": "Daytime – bright",
-    "2": "Daytime – semi-obscure",
-    "3": "Night – lit",
-    "4": "Night – unlit"
-  };
-  return map[v] || "Undefined";
-}
+  switch(String(val)) {
+    case 1 : return "daytime, bright";
+    case "2": return "daytime, semi-obscure";
+    case "3": return "nighttime, lit path";
+    case "4": return "nighttime, unlit path";
+    default: return "undefined";
+  }
 }
 
 // ----------------- load files -----------------
@@ -118,51 +98,22 @@ loadFiles();
 
 // ---------------- severity filter -----------------
 function buildAccidentFilter() {
-  if (document.querySelector('.graviteCheckbox')) return;
+  if (document.querySelectorAll('.graviteCheckbox').length > 0) return;
 
   const div = L.DomUtil.create('div', 'filters p-2 bg-white rounded shadow-sm');
-
   div.innerHTML = `
     <h6><b>Filters</b></h6>
-
     <strong>Accident type:</strong><br>
     <label><input type="checkbox" class="graviteCheckbox" value="Fatal/Hospitalization"> Fatal/Hospitalization</label><br>
     <label><input type="checkbox" class="graviteCheckbox" value="Injury"> Injury</label><br>
     <label><input type="checkbox" class="graviteCheckbox" value="No Injury"> No Injury</label><br><br>
-
-    <strong>Weather (CD_COND_METEO):</strong><br>
-    <div id="weatherFilters"></div><br>
-
-    <strong>Lighting (CD_ECLRM):</strong><br>
-    <div id="lightingFilters"></div><br>
   `;
-
-  // Create weather options dynamically
-  const weatherVals = [...new Set(accidentsGeo.features.map(f => String(f.properties.CD_COND_METEO || "")))];
-  weatherVals.sort();
-
-  const wf = document.getElementById("weatherFilters");
-  weatherVals.forEach(v => {
-    const label = getWeatherLabel(v);
-    wf.innerHTML += `<label><input type="checkbox" class="weatherCheckbox" value="${v}"> ${label}</label><br>`;
-  });
-
-  // Create lighting options dynamically
-  const lightVals = [...new Set(accidentsGeo.features.map(f => String(f.properties.CD_ECLRM || "")))];
-  lightVals.sort();
-
-  const lf = document.getElementById("lightingFilters");
-  lightVals.forEach(v => {
-    const label = getLightingLabel(v);
-    lf.innerHTML += `<label><input type="checkbox" class="lightingCheckbox" value="${v}"> ${label}</label><br>`;
-  });
 
   const ctrl = L.control({position: 'topright'});
   ctrl.onAdd = () => div;
   ctrl.addTo(map);
 
-  document.querySelectorAll('.graviteCheckbox, .weatherCheckbox, .lightingCheckbox')
-    .forEach(cb => cb.addEventListener('change', renderPreview));
+  document.querySelectorAll('.graviteCheckbox').forEach(cb => cb.addEventListener('change', renderPreview));
 }
 
 // ---------------- render preview -----------------
@@ -171,25 +122,18 @@ function getSelectedTypes() {
 }
 
 function renderPreview() {
-const selectedTypes = Array.from(document.querySelectorAll('.graviteCheckbox:checked')).map(x => x.value);
-const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x => x.value);
-const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x => x.value);
+  if (!accidentsGeo) return;
+  accidentsLayer.clearLayers();
+  heatLayer.clearLayers();
+  if (densestMarker) { map.removeLayer(densestMarker); densestMarker = null; }
 
-const filtered = feats.filter(f => {
-  const p = f.properties;
+  const selected = getSelectedTypes();
+  const feats = accidentsGeo.features || [];
 
-  const type = getAccidentType(p.GRAVITE);
-  if (selectedTypes.length > 0 && !selectedTypes.includes(type)) return false;
-
-  const w = String(p.CD_COND_METEO || "").trim();
-  if (selectedWeather.length > 0 && !selectedWeather.includes(w)) return false;
-
-  const l = String(p.CD_ECLRM || "").trim();
-  if (selectedLighting.length > 0 && !selectedLighting.includes(l)) return false;
-
-  return true;
-});
-
+  const filtered = feats.filter(f => {
+    const type = getAccidentType(f.properties.GRAVITE);
+    return selected.length === 0 || selected.includes(type);
+  });
 
   // Add markers + popups
   filtered.forEach(f => {
@@ -206,11 +150,10 @@ const filtered = feats.filter(f => {
       weight: 1,
       fillOpacity: 0.9
     }).bindPopup(`
-  <b>ID:</b> ${f.properties.NO_SEQ_COLL || ''}<br>
-  <b>Accident type:</b> ${accidentType}<br>
-  <b>Weather:</b> ${getWeatherLabel(f.properties.CD_COND_METEO)}<br>
-  <b>Lighting:</b> ${getLightingLabel(f.properties.CD_ECLRM)}
-`);
+      <b>ID:</b> ${f.properties.NO_SEQ_COLL || ''}<br>
+      <b>Accident type:</b> ${accidentType}<br>
+      <b>Lighting:</b> ${lightingText}
+    `);
     accidentsLayer.addLayer(marker);
   });
 
@@ -251,58 +194,25 @@ const filtered = feats.filter(f => {
 }
 
 // ---------------- Compute Results -----------------
-// ---------------- Compute Results -----------------
 computeBtn.addEventListener('click', () => {
-  if (!accidentsGeo) { 
-    resultText.innerText = "Accidents not loaded."; 
-    return; 
-  }
-
+  if (!accidentsGeo) { resultText.innerText = "Accidents not loaded."; return; }
+  const selected = getSelectedTypes();
   const feats = accidentsGeo.features || [];
-
-  // Read selected filters
-  const selectedTypes = Array.from(document.querySelectorAll('.graviteCheckbox:checked')).map(x => x.value);
-  const selectedWeather = Array.from(document.querySelectorAll('.weatherCheckbox:checked')).map(x => x.value);
-  const selectedLighting = Array.from(document.querySelectorAll('.lightingCheckbox:checked')).map(x => x.value);
-
-  // Apply filters
   const filtered = feats.filter(f => {
-    const p = f.properties;
-
-    // Accident type
-    const type = getAccidentType(p.GRAVITE);
-    if (selectedTypes.length > 0 && !selectedTypes.includes(type)) return false;
-
-    // Weather filter
-    const w = String(p.CD_COND_METEO || "").trim();
-    if (selectedWeather.length > 0 && !selectedWeather.includes(w)) return false;
-
-    // Lighting filter
-    const l = String(p.CD_ECLRM || "").trim();
-    if (selectedLighting.length > 0 && !selectedLighting.includes(l)) return false;
-
-    return true;
+    const type = getAccidentType(f.properties.GRAVITE);
+    return selected.length === 0 || selected.includes(type);
   });
 
-  // Count how many filtered accidents were on bike lanes
   const onCount = filtered.filter(f => {
     const p = f.properties;
-    return (
-      p.ON_BIKELANE === true ||
-      String(p.ON_BIKELANE).toLowerCase() === "true" ||
-      String(p.ON_BIKELANE) === "1" ||
-      p.on_bikelane === true ||
-      String(p.on_bikelane).toLowerCase() === "true" ||
-      String(p.on_bikelane) === "1" ||
-      p.On_BikeLane === true ||
-      String(p.On_BikeLane).toLowerCase() === "true" ||
-      String(p.On_BikeLane) === "1"
-    );
+    if (p.ON_BIKELANE !== undefined) return p.ON_BIKELANE === true || String(p.ON_BIKELANE).toLowerCase() === 'true' || String(p.ON_BIKELANE) === '1';
+    if (p.on_bikelane !== undefined) return p.on_bikelane === true || String(p.on_bikelane).toLowerCase() === 'true' || String(p.on_bikelane) === '1';
+    if (p.On_BikeLane !== undefined) return p.On_BikeLane === true || String(p.On_BikeLane).toLowerCase() === 'true' || String(p.On_BikeLane) === '1';
+    return false;
   }).length;
 
   const total = filtered.length;
-  const pct = total > 0 ? ((onCount / total) * 100).toFixed(1) : "0";
-
+  const pct = total > 0 ? ((onCount/total)*100).toFixed(1) : "0";
   resultText.innerText = `${pct}% on bike lanes (${onCount}/${total})`;
 });
 
