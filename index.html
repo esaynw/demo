@@ -31,7 +31,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.18); 
     }
 
-    /* tighter filter UI */
+    /* Tighter filter UI */
     .filters { 
       min-width: 180px; 
       font-size: 13px; 
@@ -50,6 +50,11 @@
       font-weight: 600;
     }
 
+    /* About section scroll for smaller screens */
+    #aboutPanel { max-height: 600px; overflow-y: auto; }
+
+    .bg-light-green { background-color: #eaf3ec !important; }
+    .text-forest { color: #2f5d50 !important; }
   </style>
 </head>
 
@@ -74,7 +79,6 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="map-tab" data-bs-toggle="tab" data-bs-target="#mapPanel" type="button" role="tab">Map</button>
       </li>
-
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="about-tab" data-bs-toggle="tab" data-bs-target="#aboutPanel" type="button" role="tab">About</button>
       </li>
@@ -84,7 +88,6 @@
 
       <!-- MAP TAB -->
       <div class="tab-pane fade show active" id="mapPanel" role="tabpanel">
-
         <main class="my-4">
           <div id="map" class="rounded-4 shadow-sm"></div>
           <!-- Compute button below the map -->
@@ -93,6 +96,7 @@
             <div id="resultText"></div>
           </div>
         </main>
+      </div> <!-- End of mapPanel -->
 
       <!-- ABOUT TAB -->
       <div class="tab-pane fade" id="aboutPanel" role="tabpanel">
@@ -107,10 +111,11 @@
             </p>
           </div>
         </section>
-      </div>
+      </div> <!-- End of aboutPanel -->
 
-    </div>
-  </div>
+    </div> <!-- End tab-content -->
+
+  </div> <!-- End container -->
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
