@@ -312,20 +312,13 @@ function renderPreview() {
   // Heatmap for filtered points
   if (filtered.length > 0 && L.heatLayer) {
     const pts = filtered.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0], 0.7]);
-const heat = L.heatLayer(pts, {
-  pane: "heatPane",
-  radius: 25,
-  blur: 20,
-  maxZoom: 18,
-  gradient: {
-    0.0: "#ffffb2",  // pale yellow
-    0.4: "#fecc5c",  // orange-yellow
-    0.7: "#fd8d3c",  // deep orange
-    1.0: "#e31a1c"   // strong red
-  },
-  minOpacity: 0.35
-});
-
+    const heat = L.heatLayer(pts, {
+      pane: "heatPane",
+      radius: 25,
+      blur: 20,
+      gradient: { 0.2: "yellow", 0.5: "orange", 1: "red" },
+      minOpacity: 0.3
+    });
     heatLayer.addLayer(heat);
   }
 
