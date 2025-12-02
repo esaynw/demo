@@ -1,6 +1,8 @@
 // ================================
-// UPDATED — Montreal Bike Accident Hotspots
-// Guaranteed rendering from bikes.geojson
+// FINAL — Montreal Bike Accident Hotspots
+// Points + Weather + Lighting fixed
+// Now with real Turf.js bike-lane detection
+// Heatmap restored
 // ================================
 
 // ---------------- init map ----------------
@@ -15,37 +17,36 @@ L.tileLayer('https://cartodb-basemaps-a.global.ssl.fastly.net/light_nolabels/{z}
 map.createPane("roadsPane").style.zIndex = 300;
 map.createPane("collisionsPane").style.zIndex = 400;
 map.createPane("heatPane").style.zIndex = 450;
-map.createPane("densePane").style.zIndex = 460;
 
-// ---------------- state ----------------
+// state
 let accidentsGeo = null;
 let lanesGeo = null;
 
 let accidentsLayer = L.layerGroup().addTo(map);
 let heatLayer = L.layerGroup().addTo(map);
 
+let selectedVariable = null;
+
 // UI
 const computeBtn = document.getElementById("computeBtn");
 const resultText = document.getElementById("resultText");
 
-
 // --------------------------------------------------
-// FIX — Normalize codes (11.0 → "11")
+// Normalize codes (11.0 → "11")
 // --------------------------------------------------
 function normalizeCode(v) {
   if (v === null || v === undefined) return "";
-  const s = String(v).trim().toLowerCase();
-  if (["nan", "none", ""].includes(s)) return "";
+  const s = String(v).trim();
   const num = parseInt(s, 10);
   return Number.isNaN(num) ? "" : String(num);
 }
 
 // --------------------------------------------------
-// FIX — Weather labels
+// Weather label
 // --------------------------------------------------
 function getWeatherLabel(val) {
   const v = normalizeCode(val);
-  const map = {
+  return {
     "11": "Clear",
     "12": "Partly cloudy",
     "13": "Cloudy",
@@ -56,25 +57,37 @@ function getWeatherLabel(val) {
     "18": "High winds",
     "19": "Other precip",
     "99": "Other / Unspecified"
-  };
-  return map[v] || "Undefined";
+  }[v] || "Undefined";
+}
+
+// Weather color
+function getWeatherColor(val) {
+  const v = parseInt(normalizeCode(val)) || 0;
+  const colors = ["#00ff00","#66ff66","#ccff66","#ffff66","#ffcc66","#ff9966","#ff6666","#cc66ff","#9966ff","#6666ff"];
+  return colors[v % colors.length];
 }
 
 // --------------------------------------------------
-// FIX — Lighting labels
+// Lighting label
 // --------------------------------------------------
 function getLightingLabel(val) {
   const v = normalizeCode(val);
-  const map = {
+  return {
     "1": "Daytime – bright",
     "2": "Daytime – semi-obscure",
     "3": "Night – lit",
     "4": "Night – unlit"
-  };
-  return map[v] || "Undefined";
+  }[v] || "Undefined";
 }
 
-// Accident type
+// Lighting color
+function getLightingColor(val) {
+  const v = parseInt(normalizeCode(val)) || 0;
+  const colors = ["#ffff66","#ffcc66","#ff9966","#ff6666"];
+  return colors[v % colors.length];
+}
+
+// Accident Type mapping
 function getAccidentType(val) {
   if (!val) return "No Injury";
   const g = String(val).toLowerCase();
@@ -85,34 +98,19 @@ function getAccidentType(val) {
 
 
 // --------------------------------------------------
-// GUARANTEED LOAD FILES
+// Load Files
 // --------------------------------------------------
 async function loadFiles() {
-  console.log("Loading accidents from bikes.geojson…");
+  console.log("Loading bikes.geojson…");
+  const accRes = await fetch("bikes.geojson");
+  accidentsGeo = await accRes.json();
 
-  const accidentsResponse = await fetch("bikes.geojson");
-  if (!accidentsResponse.ok) {
-    console.error("Failed to load bikes.geojson");
-    resultText.innerText = "Could not load accident data.";
-    computeBtn.disabled = true;
-    return;
-  }
-
-  accidentsGeo = await accidentsResponse.json();
-
-  // Debug output
-  console.log("Loaded bikes.geojson → features:", accidentsGeo.features.length);
-  console.log("Sample feature:", accidentsGeo.features[0]);
-
-  // Load lanes
   console.log("Loading reseau_cyclable.json…");
-  const lanesResponse = await fetch("reseau_cyclable.json");
-  if (!lanesResponse.ok) {
-    console.error("Failed to load reseau_cyclable.json");
-    resultText.innerText = "Could not load bike lanes file.";
-    return;
-  }
-  lanesGeo = await lanesResponse.json();
+  const laneRes = await fetch("reseau_cyclable.json");
+  lanesGeo = await laneRes.json();
+
+  console.log("Building Turf.js lanes index…");
+  window.turfLaneIndex = lanesGeo.features.map(l => turf.buffer(l, 5, { units: "meters" }));
 
   drawLanes();
   buildVariableMenu();
@@ -120,7 +118,7 @@ async function loadFiles() {
 }
 
 
-// Draw bike lanes
+// Draw lanes
 function drawLanes() {
   L.geoJSON(lanesGeo, {
     pane: "roadsPane",
@@ -129,64 +127,72 @@ function drawLanes() {
 }
 
 
+// --------------------------------------------------
+// Detect ON_BIKELANE using Turf.js
+// --------------------------------------------------
+function turfDetectBikeLane(pt) {
+  const turfPt = turf.point(pt);
+  for (const lanePoly of turfLaneIndex) {
+    if (turf.booleanPointInPolygon(turfPt, lanePoly)) return true;
+  }
+  return false;
+}
+
+
 // ---------------- preview -----------------
 function renderPreview() {
   accidentsLayer.clearLayers();
   heatLayer.clearLayers();
 
-  if (!accidentsGeo) return;
+  const heatPts = [];
 
-  accidentsGeo.features.forEach((f, idx) => {
-    // Validate geometry
-    if (!f.geometry || !f.geometry.coordinates) {
-      console.warn("Invalid geometry at", idx, f);
-      return;
-    }
+  accidentsGeo.features.forEach((f, i) => {
+    if (!f.geometry) return;
 
     const [lon, lat] = f.geometry.coordinates;
-
-    if (typeof lon !== "number" || typeof lat !== "number") {
-      console.warn("Non-numeric coords at", idx, f);
-      return;
-    }
-
     const p = f.properties;
+
+    // Compute turf-based ON_BIKELANE
+    p.ON_BIKELANE = turfDetectBikeLane([lon, lat]);
+
+    // Color logic
     let color = "#666";
+    if (selectedVariable === "GRAVITE") color = getAccidentType(p.GRAVITE) === "Fatal/Hospitalization" ? "red" :
+                                                getAccidentType(p.GRAVITE) === "Injury" ? "yellow" : "green";
+    else if (selectedVariable === "CD_COND_METEO") color = getWeatherColor(p.CD_COND_METEO);
+    else if (selectedVariable === "CD_ECLRM") color = getLightingColor(p.CD_ECLRM);
+    else if (selectedVariable === "ON_BIKELANE") color = p.ON_BIKELANE ? "green" : "red";
 
-    if (selectedVariable === "GRAVITE") {
-      color = getAccidentType(p.GRAVITE) === "Fatal/Hospitalization" ? "red" :
-              getAccidentType(p.GRAVITE) === "Injury" ? "yellow" : "green";
-
-    } else if (selectedVariable === "CD_COND_METEO") {
-      color = "#ff8800"; // simplified color for weather
-
-    } else if (selectedVariable === "CD_ECLRM") {
-      color = "#00aaee"; // simplified color for lighting
-
-    } else if (selectedVariable === "ON_BIKELANE") {
-      const onLane = !!p.ON_BIKELANE;
-      color = onLane ? "green" : "red";
-    }
-
+    // Popup
     const popup = `
-      <b>ID:</b> ${p.NO_SEQ_COLL || ""}<br>
+      <b>ID:</b> ${p.NO_SEQ_COLL}<br>
       <b>Accident:</b> ${getAccidentType(p.GRAVITE)}<br>
       <b>Weather:</b> ${getWeatherLabel(p.CD_COND_METEO)}<br>
       <b>Lighting:</b> ${getLightingLabel(p.CD_ECLRM)}<br>
       <b>Bike Lane:</b> ${p.ON_BIKELANE ? "Yes" : "No"}
     `;
 
-    const marker = L.circleMarker([lat, lon], {
+    L.circleMarker([lat, lon], {
       pane: "collisionsPane",
       radius: 4,
       fillColor: color,
       color: "#000",
       weight: 1,
       fillOpacity: 0.9
-    }).bindPopup(popup);
+    }).bindPopup(popup).addTo(accidentsLayer);
 
-    accidentsLayer.addLayer(marker);
+    // Heatmap point
+    heatPts.push([lat, lon, 0.7]);
   });
+
+  // Add Heatmap
+  const heat = L.heatLayer(heatPts, {
+    pane: "heatPane",
+    radius: 25,
+    blur: 20,
+    minOpacity: 0.3
+  });
+  heat.addTo(heatLayer);
 }
 
 
@@ -205,8 +211,8 @@ function buildVariableMenu() {
   ctrl.onAdd = () => div;
   ctrl.addTo(map);
 
-  div.querySelectorAll('input[name="variable"]').forEach(radio => {
-    radio.addEventListener("change", e => {
+  div.querySelectorAll('input[name="variable"]').forEach(r => {
+    r.addEventListener("change", e => {
       selectedVariable = e.target.value;
       renderPreview();
     });
@@ -214,5 +220,5 @@ function buildVariableMenu() {
 }
 
 
-// ---------------- START APP -----------------
+// ---------------- START -----------------
 loadFiles();
