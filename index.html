@@ -15,23 +15,7 @@
     /* Reduce map height */
     #map { height: 480px; border-radius: 12px; }
 
-    /* Compute result styling to match tab title */
-    #resultText {
-      color: #2f5d50;
-      font-weight: 600;
-      font-size: 1.1rem;
-      margin-top: 0.5rem;
-    }
-
-    .results-bar { 
-      font-size: 14px; 
-      line-height:1.4; 
-      padding:8px; 
-      background: rgba(255,255,255,0.95); 
-      border-radius:8px; 
-      box-shadow: 0 2px 6px rgba(0,0,0,0.18); 
-    }
-
+   
     /* tighter filter UI */
     .filters { 
       min-width: 180px; 
@@ -87,10 +71,6 @@
   <div class="tab-pane fade show active" id="mapPanel" role="tabpanel">
     <main class="my-4">
       <div id="map" class="rounded-4 shadow-sm"></div>
-      <!-- Compute button below the map -->
-      <div class="info-card p-3 rounded-4 shadow-sm bg-white mt-3 d-inline-block">
-        <button id="computeBtn" class="btn btn-success btn-sm">Compute</button>
-        <div id="resultText"></div>
       </div>
     </main>
   </div> <!-- End of mapPanel -->
