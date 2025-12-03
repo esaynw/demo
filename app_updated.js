@@ -1,10 +1,3 @@
-// ================================
-// Montreal Bike Accident Hotspots
-// Filters + heatmap + dynamic densest point
-// Bike-lane tagging via turf.js (5m buffer)
-// Category-first UI (B1): one active category at a time,
-// multi-select within that category
-// ================================
 
 // ---------------- init map ----------------
 const map = L.map('map').setView([45.508888, -73.561668], 12);
@@ -30,9 +23,7 @@ let densestMarker = null;
 
 const resultText = document.getElementById("resultText");
 
-// Filters: we will only apply the *activeCategory*;
-// within that category we OR across checked values
-let activeCategory = null;  // "accidentType" | "weather" | "lighting" | "bikeLane" | null
+let activeCategory = null;  
 
 const filters = {
   accidentType: new Set(),  // "Fatal/Hospitalization", "Injury", "No Injury"
@@ -49,9 +40,8 @@ const defaultFilters = {
   bikeLane: new Set(["on","off"])
 };
 
-// --------------------------------------------------
-// Normalize codes (11.0 → "11")
-// --------------------------------------------------
+// Normalize codes
+
 function normalizeCode(v) {
   if (v === null || v === undefined) return "";
   const s = String(v).trim().toLowerCase();
@@ -60,9 +50,8 @@ function normalizeCode(v) {
   return Number.isNaN(num) ? "" : String(num);
 }
 
-// --------------------------------------------------
 // Weather labels
-// --------------------------------------------------
+
 function getWeatherLabel(val) {
   const v = normalizeCode(val);
   const map = {
@@ -80,9 +69,9 @@ function getWeatherLabel(val) {
   return map[v] || "Undefined";
 }
 
-// --------------------------------------------------
+
 // Lighting labels
-// --------------------------------------------------
+
 function getLightingLabel(val) {
   const v = normalizeCode(val);
   const map = {
@@ -109,7 +98,7 @@ function getAccidentColorFromType(type) {
   return "#1a9850";                                        // green for No Injury
 }
 
-// Distinct colours for weather (just an example palette)
+//colours for weather 
 function getWeatherColor(code) {
   const c = normalizeCode(code);
   const colorMap = {
@@ -127,7 +116,7 @@ function getWeatherColor(code) {
   return colorMap[c] || "#666666";
 }
 
-// Distinct colours for lighting
+//  colours for lighting
 function getLightingColor(code) {
   const c = normalizeCode(code);
   const colorMap = {
@@ -139,12 +128,12 @@ function getLightingColor(code) {
   return colorMap[c] || "#666666";
 }
 
-// Distinct colours for bike lane
+// colours for bike lane
 function getBikeLaneColor(onLane) {
   return onLane ? "#1a9850" : "#d73027"; // green on lane, red off lane
 }
 
-// ----------------- load files -----------------
+// load files
 async function loadFiles() {
   console.log("Loading accidents from bikes.geojson…");
 
@@ -180,7 +169,7 @@ async function loadFiles() {
   renderPreview();
 }
 
-// Tag accidents with ON_BIKELANE using turf.js
+//  turf.js
 function tagBikeLanesWithTurf() {
   if (!accidentsGeo || !lanesGeo || !lanesGeo.features) return;
 
@@ -211,7 +200,7 @@ function tagBikeLanesWithTurf() {
   console.log(`Finished tagging bike-lane status. On-lane accidents: ${onCount}`);
 }
 
-// Draw bike lanes
+// bike lanes
 function drawLanes() {
   L.geoJSON(lanesGeo, {
     pane: "roadsPane",
@@ -219,7 +208,7 @@ function drawLanes() {
   }).addTo(map);
 }
 
-// ---------------- filtering logic ----------------
+// iltering
 function featurePassesFilters(p) {
   // If no active category, show everything
   if (!activeCategory) return true;
@@ -250,7 +239,7 @@ function featurePassesFilters(p) {
   }
 }
 
-// ---------------- preview & heatmap & densest -----------------
+//  heatmap & densest 
 function renderPreview() {
   accidentsLayer.clearLayers();
   heatLayer.clearLayers();
@@ -309,7 +298,7 @@ function renderPreview() {
     accidentsLayer.addLayer(marker);
   });
 
-  // Heatmap for filtered points
+  // Heatmap
   if (filtered.length > 0 && L.heatLayer) {
     const pts = filtered.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0], 0.7]);
     const heat = L.heatLayer(pts, {
@@ -322,12 +311,11 @@ function renderPreview() {
     heatLayer.addLayer(heat);
   }
 
-  // Dynamic densest point from filtered set
+  // densest point
   updateDensestMarker(filtered);
 }
 
-// Free-grid densest point using turf.squareGrid
-// 75m cell size (0.075 km)
+//Grid for densest
 function updateDensestMarker(features) {
   if (!features || features.length === 0 || typeof turf === "undefined") return;
 
@@ -368,7 +356,7 @@ function updateDensestMarker(features) {
   densestMarker.addTo(map);
 }
 
-// ---------------- filter UI (B1: category-first) -----------------
+// Legend filter
 function buildFilterMenu() {
   const div = L.DomUtil.create("div", "filters p-2 bg-white rounded shadow-sm");
 
@@ -438,13 +426,11 @@ function buildFilterMenu() {
   ctrl.onAdd = () => div;
   ctrl.addTo(map);
 
-  // Init filters to defaults
   filters.accidentType = new Set(defaultFilters.accidentType);
   filters.weather      = new Set(defaultFilters.weather);
   filters.lighting     = new Set(defaultFilters.lighting);
   filters.bikeLane     = new Set(defaultFilters.bikeLane);
 
-  // Category radio buttons
   const categoryRadios = div.querySelectorAll("input[name=category]");
   categoryRadios.forEach(radio => {
     radio.addEventListener("change", e => {
@@ -454,8 +440,7 @@ function buildFilterMenu() {
       renderPreview();
     });
   });
-
-  // Checkbox listeners (for whichever panel is visible)
+  
   const checkboxes = div.querySelectorAll("input[type=checkbox][data-category]");
   checkboxes.forEach(cb => {
     const cat = cb.dataset.category;
@@ -475,7 +460,7 @@ function buildFilterMenu() {
 function setActiveCategory(cat) {
   activeCategory = cat;
 
-  // Show only active panel
+  // active olnly
   const panels = document.querySelectorAll("[data-panel]");
   panels.forEach(panel => {
     if (panel.dataset.panel === cat) {
@@ -487,10 +472,9 @@ function setActiveCategory(cat) {
 }
 
 function resetCategoryFilters(cat, rootDiv) {
-  // Reset that category's filters to default (all selected)
+  //filter resest
   filters[cat] = new Set(defaultFilters[cat]);
 
-  // Check all checkboxes for that category, uncheck others only if you want full reset
   const allCheckboxes = rootDiv.querySelectorAll("input[type=checkbox][data-category]");
   allCheckboxes.forEach(cb => {
     if (cb.dataset.category === cat) {
@@ -498,6 +482,4 @@ function resetCategoryFilters(cat, rootDiv) {
     }
   });
 }
-
-// ---------------- START APP -----------------
 loadFiles();
