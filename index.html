@@ -6,17 +6,14 @@
   <title>Montreal Bike Accident Hotspots</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bootstrap & Leaflet CSS -->
+ /* Bootstrap & Leaflet */
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css">
 
   <style>
-    /* Reduce map height */
     #map { height: 480px; border-radius: 12px; }
 
-   
-    /* tighter filter UI */
     .filters { 
       min-width: 180px; 
       font-size: 13px; 
@@ -40,7 +37,7 @@
 
 <body>
 
-  <!-- Header -->
+  /* Header */
   <header class="py-5 text-center bg-light-green shadow-sm">
     <div class="container">
       <h1 class="display-5 fw-bold text-forest">Bike Accident Hotspots and Trends</h1>
@@ -50,9 +47,7 @@
     </div>
   </header>
 
-  <!-- =========================== -->
-  <!--        TABS (MAP/ABOUT)     -->
-  <!-- =========================== -->
+/* Map about section */
   <div class="container mt-4">
 
     <ul class="nav nav-tabs" id="mainTabs" role="tablist">
@@ -67,7 +62,7 @@
 
 <div class="tab-content">
 
-  <!-- MAP TAB -->
+  /* tab */
   <div class="tab-pane fade show active" id="mapPanel" role="tabpanel">
     <main class="my-4">
       <div id="map" class="rounded-4 shadow-sm"></div>
@@ -75,14 +70,14 @@
     </main>
   </div> <!-- End of mapPanel -->
 
-  <!-- ABOUT TAB -->
+ /*about */
   <div class="tab-pane fade" id="aboutPanel" role="tabpanel">
     <section class="my-4">
       <div class="info-card p-4 rounded-4 shadow-sm bg-white">
         <h2 class="h5 text-forest mb-3">About this project</h2>
         <p>
-          This map visualizes reported bike accidents and cycling infrastructure in Montreal. It analyses open data from the City of Montreal. Each point represents a collision event, with colour-coding based on selected variables. 
-          Using this map, users are able to compute and visualize different contributing factors and themes in bike accidents. This project presents an early prototype for what could be a more expansive and in-depth look into cyclist safety 
+          This map visualizes reported bike accidents and cycling infrastructure in Montreal. It analyses open data from the City of Montreal as well as the SAAQ. Each point represents a collision event, with colour-coding based on selected variables. 
+          Using this map, users are able to visualize different contributing factors and themes in bike accidents. This project presents an early prototype for what could be a more expansive and in-depth look into cyclist safety 
           in dense urban environments. Increasing the amount of variables, a larger dataset of accidents for processing, and the integration of street-specific usage analysis and weighting, could produce interesting results for better understanding 
           of and adapting to cyclist hazards.
         </p>
