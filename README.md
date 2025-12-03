@@ -1,6 +1,6 @@
-# demo
+# Map Project
 
-_A simple interactive map / geojson-based visualization demo_  
+_A simple interactive map / geojson-based visualization_  
 
 ## Overview
 
